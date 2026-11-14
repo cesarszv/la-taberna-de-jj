@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * Hook personalizado para persistir estado en localStorage.
@@ -25,10 +25,13 @@ function usePersistentState<T>(key: string, initialState: T): [T, (value: T | ((
     }
   });
 
+  const stateRef = useRef(state);
+
   // Wrapper para setState que también actualiza localStorage
   const setValue = useCallback((value: T | ((val: T) => T)) => {
     try {
-      const valueToStore = value instanceof Function ? (value as (val: T) => T)(state) : value;
+      const valueToStore = value instanceof Function ? (value as (val: T) => T)(stateRef.current) : value;
+      stateRef.current = valueToStore;
       setState(valueToStore);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
@@ -36,14 +39,16 @@ function usePersistentState<T>(key: string, initialState: T): [T, (value: T | ((
     } catch (error) {
       console.error("Error writing to localStorage", error);
     }
-  }, [key, state]);
+  }, [key]);
 
   useEffect(() => {
     // Sincronizar cambios desde otras pestañas
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === key && event.newValue) {
         try {
-          setState(JSON.parse(event.newValue));
+          const nextValue = JSON.parse(event.newValue);
+          stateRef.current = nextValue;
+          setState(nextValue);
         } catch (error) {
           console.error("Error parsing storage change", error);
         }
